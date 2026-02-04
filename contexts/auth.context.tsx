@@ -16,6 +16,7 @@ interface AuthContextValue {
   isLoading: boolean
   login: (email: string, password: string) => Promise<AuthResult>
   signUp: (email: string, password: string) => Promise<AuthResult>
+  signInWithOAuth: (provider: 'google' | 'github') => Promise<void>
   logout: () => Promise<void>
   resetPassword: (email: string) => Promise<{ success: boolean; error?: string }>
 }
@@ -41,10 +42,10 @@ function createDemoUser(): User {
 }
 
 function createUserFromEmail(email: string, id: string): User {
-  const name = email.split('@')[0].split('.').map(part => 
+  const name = email.split('@')[0].split('.').map(part =>
     part.charAt(0).toUpperCase() + part.slice(1)
   ).join(' ')
-  
+
   return {
     id,
     name: name || 'User',
@@ -128,7 +129,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       document.cookie = `nuclear_demo_user=true; path=/; max-age=86400` // 24 hours
       return { success: true, user: demoUser }
     }
-    
+
     // Try Supabase authentication
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -141,11 +142,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (error.message.toLowerCase().includes('invalid login credentials')) {
           return { success: false, error: 'Invalid email or password. Please check your credentials and try again.' }
         }
-        
+
         if (error.message.toLowerCase().includes('email not confirmed')) {
           return { success: false, error: 'Please confirm your email address before logging in. Check your inbox for the confirmation link.' }
         }
-        
+
         return { success: false, error: sanitizeErrorMessage(error) }
       }
 
@@ -159,12 +160,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       return { success: false, error: 'Login failed. Please try again.' }
     } catch (error) {
       console.error('Login error:', error)
-      
+
       // Check if it's a network error
       if (isNetworkError(error)) {
         return { success: false, error: 'Network error. Please check your internet connection and try again.' }
       }
-      
+
       return { success: false, error: sanitizeErrorMessage(error) }
     }
   }, [supabase.auth])
@@ -184,19 +185,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (error.message.toLowerCase().includes('user already registered')) {
           throw new AccountExistsError()
         }
-        
+
         if (error.message.toLowerCase().includes('password')) {
           return { success: false, error: 'Password must be at least 6 characters long.' }
         }
-        
+
         if (error.message.toLowerCase().includes('email')) {
           return { success: false, error: 'Invalid email format. Please enter a valid email address.' }
         }
-        
+
         if (error.message.toLowerCase().includes('rate limit')) {
           return { success: false, error: 'Too many signup attempts. Please try again in a few minutes.' }
         }
-        
+
         return { success: false, error: sanitizeErrorMessage(error) }
       }
 
@@ -206,7 +207,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (data.user.identities && data.user.identities.length === 0) {
           throw new AccountExistsError()
         }
-        
+
         // If email confirmation is required (no session returned)
         if (!data.session) {
           const appUser = createUserFromEmail(email, data.user.id)
@@ -219,13 +220,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const appUser = createUserFromEmail(data.user.email || '', data.user.id)
         setUser(appUser)
         localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(appUser))
-        
+
         if (process.env.NODE_ENV === 'development') {
           console.log('✅ Signup successful for user:', data.user.email)
         }
-        
-        return { 
-          success: true, 
+
+        return {
+          success: true,
           user: appUser,
           message: 'Account created successfully! You are now logged in.'
         }
@@ -234,28 +235,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
       return { success: false, error: 'Sign up failed. Please try again.' }
     } catch (error) {
       console.error('Sign up error:', error)
-      
+
       // Handle custom errors
       if (error instanceof EmailConfirmationRequiredError) {
         // Generate a temporary ID for the user pending confirmation
         // This user object is informational only and won't be stored
         const tempId = `pending-${Date.now()}`
-        return { 
-          success: true, 
+        return {
+          success: true,
           user: createUserFromEmail(email, tempId),
-          message: error.message 
+          message: error.message
         }
       }
-      
+
       if (error instanceof AccountExistsError) {
         return { success: false, error: error.message }
       }
-      
+
       // Check if it's a network error
       if (isNetworkError(error)) {
         return { success: false, error: 'Network error. Please check your internet connection and try again.' }
       }
-      
+
       return { success: false, error: sanitizeErrorMessage(error) }
     }
   }, [supabase.auth])
@@ -286,6 +287,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
     document.cookie = `nuclear_demo_user=; path=/; max-age=0`
   }, [supabase.auth])
 
+  const signInWithOAuth = useCallback(async (provider: 'google' | 'github') => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      })
+
+      if (error) {
+        console.error(`${provider} OAuth error:`, error)
+        throw error
+      }
+    } catch (error) {
+      console.error(`Error signing in with ${provider}:`, error)
+      throw error
+    }
+  }, [supabase.auth])
+
   const resetPassword = useCallback(async (email: string) => {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -296,18 +316,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (error.message.toLowerCase().includes('rate limit')) {
           return { success: false, error: 'Too many password reset attempts. Please try again in a few minutes.' }
         }
-        
+
         return { success: false, error: sanitizeErrorMessage(error) }
       }
 
       return { success: true }
     } catch (error) {
       console.error('Password reset error:', error)
-      
+
       if (isNetworkError(error)) {
         return { success: false, error: 'Network error. Please check your internet connection and try again.' }
       }
-      
+
       return { success: false, error: sanitizeErrorMessage(error) }
     }
   }, [supabase.auth])
@@ -319,6 +339,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       isLoading,
       login,
       signUp,
+      signInWithOAuth,
       logout,
       resetPassword,
     }}>

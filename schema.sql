@@ -126,3 +126,73 @@ ALTER TABLE public.deliveries ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Deliveries viewable by authenticated users" 
 ON public.deliveries FOR SELECT TO authenticated USING (true);
+-- 7. PRODUCTS
+CREATE TABLE IF NOT EXISTS public.products (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  brand TEXT,
+  dosage_form TEXT,
+  strength TEXT,
+  gtin TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Products viewable by authenticated users" ON public.products FOR SELECT TO authenticated USING (true);
+
+-- 8. PROCUREMENT REQUESTS
+CREATE TABLE IF NOT EXISTS public.procurements (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  product_id TEXT REFERENCES public.products(id),
+  quantity INTEGER NOT NULL,
+  priority TEXT CHECK (priority IN ('Normal', 'High', 'Urgent')),
+  status TEXT CHECK (status IN ('Pending', 'Approved', 'Ordered', 'In Transit', 'Completed', 'Cancelled')),
+  delivery_date DATE,
+  user_id UUID REFERENCES auth.users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.procurements ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Procurements viewable by authenticated users" ON public.procurements FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Users can insert procurements" ON public.procurements FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "Users can update own procurements" ON public.procurements FOR UPDATE TO authenticated USING (true);
+
+-- 9. AUDIT TRAIL (Traceability)
+CREATE TABLE IF NOT EXISTS public.audit_trail (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  shipment_id UUID REFERENCES public.shipments(id),
+  procurement_id UUID REFERENCES public.procurements(id),
+  timestamp TIMESTAMPTZ DEFAULT NOW(),
+  event_type TEXT NOT NULL,
+  actor TEXT,
+  location TEXT,
+  description TEXT,
+  hash TEXT,
+  blockchain_tx TEXT,
+  metadata JSONB DEFAULT '{}'::jsonb
+);
+
+ALTER TABLE public.audit_trail ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Audit trail viewable by authenticated users" ON public.audit_trail FOR SELECT TO authenticated USING (true);
+CREATE POLICY "System can insert audit trail" ON public.audit_trail FOR INSERT TO authenticated WITH CHECK (true);
+
+-- Seed Products from Spreadsheet
+INSERT INTO public.products (id, name, brand, dosage_form, strength, gtin) VALUES
+('PT-1001', 'AmoxiTrace 500', 'PharmaTrace Labs', 'Capsule', '500mg', '4012345001001'),
+('PT-2005', 'CardioGuard 20', 'PharmaTrace Labs', 'Tablet', '20mg', '4012345002005'),
+('PT-3003', 'VaxSafe COVID', 'PharmaTrace Bio', 'Vial', '0.5ml', '4012345003003'),
+('PT-4004', 'PainRelief Max', 'PharmaTrace Generic', 'Tablet', '100mg', '4012345004004'),
+('PT-5005', 'OncoCure IV', 'PharmaTrace Bio', 'Vial', '50ml', '4012345005005'),
+('PT-6001', 'HerbaLife Supp', 'GreenPharma', 'Bottle', '60 Caps', '4012345006001'),
+('PT-7007', 'NeuroCalm', 'PharmaTrace Generic', 'Tablet', '10mg', '4012345007007'),
+('PT-8008', 'DermaCream', 'PharmaTrace Consumer', 'Tube', '50g', '4012345008008'),
+('PT-9009', 'EyeClear Drops', 'PharmaTrace Bio', 'Dropper', '10ml', '4012345009009'),
+('PT-1100', 'DiabetInsul', 'PharmaTrace Bio', 'Pen', '3ml', '4012345011000'),
+('PT-1200', 'PainFree Gel', 'PharmaTrace Consumer', 'Tube', '100g', '4012345012000')
+ON CONFLICT (id) DO UPDATE SET
+  name = EXCLUDED.name,
+  brand = EXCLUDED.brand,
+  dosage_form = EXCLUDED.dosage_form,
+  strength = EXCLUDED.strength,
+  gtin = EXCLUDED.gtin;

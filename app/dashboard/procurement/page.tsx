@@ -1,209 +1,285 @@
 'use client';
 
-import { Plus, Filter, Search, Eye, Edit, X, ChevronDown } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { Plus, Filter, Search, Eye, Edit, X, ChevronDown, Loader2 } from 'lucide-react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { MobileOnly, DesktopOnly, MobileTableCard, MobileTableCardRow } from '@/components/responsive';
+import {
+  getProducts,
+  getProcurements,
+  submitProcurementRequest,
+  deleteProcurementRequest,
+  Product,
+  Procurement
+} from '@/lib/api/procurement.api';
+import { toast } from 'sonner';
 
 export default function ProcurementPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-full p-12"><Loader2 className="w-8 h-8 animate-spin text-purple-600" /></div>}>
+      <ProcurementContent />
+    </Suspense>
+  );
+}
+
+function ProcurementContent() {
   const searchParams = useSearchParams();
   const viewParam = searchParams?.get('view');
   const [view, setView] = useState<'list' | 'form' | 'quotes'>('list');
-  // Remove multi-step form for 1-step creation
   const [editingRequest, setEditingRequest] = useState<any>(null);
 
-  // Handle URL parameter on mount
+  const [products, setProducts] = useState<Product[]>([]);
+  const [requests, setRequests] = useState<Procurement[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Form State
+  const [formData, setFormData] = useState({
+    product_id: '',
+    quantity: 1,
+    priority: 'Normal' as 'Normal' | 'High' | 'Urgent',
+    delivery_date: '',
+    location: '',
+    notes: ''
+  });
+
+  // Fetch data
+  useEffect(() => {
+    async function fetchData() {
+      setIsLoading(true);
+      try {
+        console.log('Fetching products...');
+        const prodList = await getProducts();
+        setProducts(prodList);
+        console.log('Products fetched successfully:', prodList.length);
+
+        console.log('Fetching procurements...');
+        const reqList = await getProcurements();
+        setRequests(reqList);
+        console.log('Procurements fetched successfully:', reqList.length);
+      } catch (error: any) {
+        // More descriptive error logging
+        const errorMessage = error?.message || 'Unknown error occurred';
+        const errorDetail = error?.details || '';
+        const errorHint = error?.hint || '';
+
+        console.error('Procurement Fetch Error Message:', errorMessage);
+        console.error('Procurement Fetch Error Details:', errorDetail);
+        console.error('Procurement Fetch Error Hint:', errorHint);
+        console.error('Full Error Object Trace:', error);
+
+        // Log specifically as string for some environments
+        try {
+          console.error('Stringified Error:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+        } catch (e) {
+          console.error('Could not stringify error object');
+        }
+
+        toast.error(`Failed to load procurement data: ${errorMessage}`);
+
+        if (errorMessage.includes('relation "public.products" does not exist')) {
+          toast.warning('Database tables missing. Please apply schema.sql in your Supabase dashboard.');
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    fetchData();
+  }, []);
+
   useEffect(() => {
     if (viewParam === 'form') {
       setView('form');
     }
   }, [viewParam]);
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.product_id || !formData.delivery_date) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await submitProcurementRequest(formData);
+      toast.success('Procurement request submitted! Logistics & Compliance updated.');
+
+      // Refresh list
+      const updatedRequests = await getProcurements();
+      setRequests(updatedRequests);
+      setView('list');
+
+      // Reset form
+      setFormData({
+        product_id: '',
+        quantity: 1,
+        priority: 'Normal',
+        delivery_date: '',
+        location: '',
+        notes: ''
+      });
+      setEditingRequest(null);
+    } catch (error) {
+      console.error('Submission failed:', error);
+      toast.error('Failed to submit request');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleEdit = (request: any) => {
     setEditingRequest(request);
+    setFormData({
+      product_id: request.product_id,
+      quantity: request.quantity,
+      priority: request.priority || 'Normal',
+      delivery_date: request.delivery_date,
+      location: request.location || '',
+      notes: request.notes || ''
+    });
     setView('form');
   };
 
-  const handleDelete = (id: string) => {
-    // Placeholder for delete functionality
-    console.log('Delete request:', id);
-  };
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this procurement request?')) return;
 
-  const procurementRequests = [
-    { 
-      id: 'PR-2847', 
-      isotope: 'Tc-99m', 
-      quantity: '500 mCi', 
-      deliveryDate: '2026-01-10', 
-      status: 'Quotes Received',
-      matchedManufacturers: 3,
-      statusColor: 'bg-blue-100 text-blue-700'
-    },
-    { 
-      id: 'PR-2846', 
-      isotope: 'F-18 FDG', 
-      quantity: '250 mCi', 
-      deliveryDate: '2026-01-08', 
-      status: 'PO Approved',
-      matchedManufacturers: 2,
-      statusColor: 'bg-green-100 text-green-700'
-    },
-    { 
-      id: 'PR-2845', 
-      isotope: 'I-131', 
-      quantity: '100 mCi', 
-      deliveryDate: '2026-01-12', 
-      status: 'Pending Quotes',
-      matchedManufacturers: 4,
-      statusColor: 'bg-amber-100 text-amber-700'
-    },
-    { 
-      id: 'PR-2844', 
-      isotope: 'Lu-177', 
-      quantity: '75 mCi', 
-      deliveryDate: '2026-01-15', 
-      status: 'Draft',
-      matchedManufacturers: 0,
-      statusColor: 'bg-gray-100 text-gray-700'
-    },
-  ];
+    try {
+      await deleteProcurementRequest(id);
+      toast.success('Request deleted successfully');
+      // Refresh list
+      const updatedRequests = await getProcurements();
+      setRequests(updatedRequests);
+    } catch (error) {
+      console.error('Delete failed:', error);
+      toast.error('Failed to delete request');
+    }
+  };
 
   if (view === 'form') {
     return (
-          <div className="max-w-3xl mx-auto">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-3">
-              <h2 className="dashboard-title text-xl sm:text-2xl">
-                {editingRequest ? 'Edit Procurement Request' : 'New Procurement Request'}
-              </h2>
-              <button 
-                onClick={() => {
-                  setView('list');
-                  setEditingRequest(null);
-                }}
-                className="dashboard-nav-item px-4 py-2 transition-colors self-start"
-                style={{ 
-                  color: 'var(--color-text-secondary)',
-                  backgroundColor: 'var(--color-bg-subtle)',
-                  borderRadius: 'var(--radius-md)'
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-            <div className="dashboard-card p-4 sm:p-6 lg:p-8 border">
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-sm mb-2 text-foreground">Isotope Type</label>
-                  <div className="relative">
-                    <select 
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent appearance-none"
-                      defaultValue={editingRequest?.isotope || ''}
-                    >
-                      <option>Select isotope...</option>
-                      <option>Tc-99m (Half-life: 6 hours)</option>
-                      <option>F-18 FDG (Half-life: 110 minutes)</option>
-                      <option>I-131 (Half-life: 8 days)</option>
-                      <option>Lu-177 (Half-life: 6.7 days)</option>
-                    </select>
-                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm mb-2 text-foreground">Activity Required</label>
-                    <input 
-                      type="number" 
-                      placeholder="500"
-                      defaultValue={editingRequest ? parseInt(editingRequest.quantity) : ''}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm mb-2 text-foreground">Unit</label>
-                    <select className="w-full px-4 py-3 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent bg-input-background text-foreground">
-                      <option>mCi</option>
-                      <option>GBq</option>
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm mb-2">Clinical Indication (Optional)</label>
-                  <textarea 
-                    rows={3}
-                    placeholder="Enter clinical indication..."
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent resize-none"
-                  ></textarea>
-                </div>
-                <div>
-                  <label className="block text-sm mb-2">Attach Documents</label>
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-purple-600 transition-colors cursor-pointer">
-                    <p className="text-gray-600">Click to upload or drag and drop</p>
-                    <p className="text-sm text-gray-500 mt-1">PDF, DOC (max. 10MB)</p>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm mb-2">Delivery Date</label>
-                  <input 
-                    type="date"
-                    defaultValue={editingRequest?.deliveryDate || ''}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm mb-2">Preferred Time Window</label>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {['Morning', 'Afternoon', 'Evening'].map((time) => (
-                      <button 
-                        key={time}
-                        className="px-4 py-3 border border-gray-300 rounded-lg hover:border-purple-600 hover:bg-purple-50 transition-colors"
-                      >
-                        {time}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm mb-2">Delivery Location</label>
-                  <input 
-                    type="text" 
-                    defaultValue="City Hospital, 123 Medical Ave, Cape Town"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm mb-2">Special Instructions</label>
-                  <textarea 
-                    rows={3}
-                    placeholder="Enter any special handling or delivery instructions..."
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent resize-none"
-                  ></textarea>
-                </div>
-                <div className="flex flex-col sm:flex-row gap-3 mt-8">
-                  <button 
-                    onClick={() => {
-                      setView('list');
-                      setEditingRequest(null);
-                    }}
-                    className="flex-1 bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 transition-colors order-1 sm:order-2"
-                  >
-                    Submit Request
-                  </button>
-                  <button className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors order-3">
-                    Save as Draft
-                  </button>
-                </div>
+      <div className="max-w-3xl mx-auto">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-3">
+          <h2 className="dashboard-title text-xl sm:text-2xl">
+            {editingRequest ? 'Edit Procurement Request' : 'New Procurement Request'}
+          </h2>
+          <button
+            onClick={() => {
+              setView('list');
+              setEditingRequest(null);
+            }}
+            className="dashboard-nav-item px-4 py-2 transition-colors self-start"
+            style={{
+              color: 'var(--color-text-secondary)',
+              backgroundColor: 'var(--color-bg-subtle)',
+              borderRadius: 'var(--radius-md)'
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+        <div className="dashboard-card p-4 sm:p-6 lg:p-8 border">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div>
+              <label className="block text-sm mb-2 text-foreground">Product Type *</label>
+              <div className="relative">
+                <select
+                  required
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent appearance-none"
+                  value={formData.product_id}
+                  onChange={(e) => setFormData({ ...formData, product_id: e.target.value })}
+                >
+                  <option value="">Select product...</option>
+                  {products.map(p => (
+                    <option key={p.id} value={p.id}>{p.name} ({p.brand})</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
               </div>
             </div>
-          </div>
-        );
-      }
-
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm mb-2 text-foreground">Quantity Required *</label>
+                <input
+                  type="number"
+                  required
+                  min="1"
+                  value={formData.quantity}
+                  onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm mb-2 text-foreground">Priority</label>
+                <select
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent"
+                  value={formData.priority}
+                  onChange={(e) => setFormData({ ...formData, priority: e.target.value as any })}
+                >
+                  <option>Normal</option>
+                  <option>High</option>
+                  <option>Urgent</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm mb-2">Delivery Date *</label>
+              <input
+                type="date"
+                required
+                value={formData.delivery_date}
+                onChange={(e) => setFormData({ ...formData, delivery_date: e.target.value })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm mb-2 text-foreground">Delivery Location</label>
+              <input
+                type="text"
+                placeholder="Enter delivery address..."
+                value={formData.location}
+                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm mb-2">Special Instructions</label>
+              <textarea
+                rows={3}
+                placeholder="Enter any special handling or delivery instructions..."
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent resize-none"
+              ></textarea>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3 mt-8">
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="flex-1 bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
+              >
+                {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
+                {editingRequest ? 'Update Request' : 'Submit Request'}
+              </button>
+              <button
+                type="button"
+                className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                onClick={() => toast.info('Draft functionality coming soon')}
+              >
+                Save as Draft
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-3">
         <h2 className="dashboard-title text-xl sm:text-2xl">Procurement Requests</h2>
-        <button 
+        <button
           onClick={() => setView('form')}
           className="btn-primary px-4 sm:px-6 py-2 sm:py-3 flex items-center justify-center gap-2 self-start font-sans"
         >
@@ -212,173 +288,101 @@ export default function ProcurementPage() {
         </button>
       </div>
 
-      {/* Filters Bar */}
       <div className="dashboard-card p-3 sm:p-4 mb-6 border flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
         <div className="relative flex-1 max-w-full sm:max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: 'var(--color-text-muted)' }} />
-          <input 
-            type="text" 
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <input
+            type="text"
             placeholder="Search requests..."
-            className="w-full pl-10 pr-4 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent bg-input-background text-foreground"
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent"
           />
         </div>
         <div className="flex flex-col sm:flex-row gap-3 sm:gap-2">
-          <select className="px-4 py-2 border border-input rounded-lg bg-gray-100 text-gray-400 cursor-not-allowed opacity-60" disabled>
+          <select className="px-4 py-2 border border-gray-300 rounded-lg bg-white">
             <option>All Statuses</option>
-            <option>Draft</option>
-            <option>Pending Quotes</option>
-            <option>Quotes Received</option>
-            <option>PO Approved</option>
+            <option>Pending</option>
+            <option>Approved</option>
+            <option>Ordered</option>
           </select>
-          <select className="px-4 py-2 border border-input rounded-lg bg-gray-100 text-gray-400 cursor-not-allowed opacity-60" disabled>
-            <option>All Isotopes</option>
-            <option>Tc-99m</option>
-            <option>F-18 FDG</option>
-            <option>I-131</option>
-          </select>
-          <button className="px-4 py-2 border border-input rounded-lg bg-gray-100 text-gray-400 cursor-not-allowed opacity-60 flex items-center justify-center gap-2" disabled>
+          <button className="px-4 py-2 border border-gray-300 rounded-lg bg-white flex items-center justify-center gap-2">
             <Filter className="w-4 h-4" />
-            More Filters
+            Filters
           </button>
         </div>
       </div>
 
-      {/* Table */}
       <div className="dashboard-card border overflow-hidden">
-        {/* Desktop Table View */}
         <DesktopOnly>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px]">
-              <thead className="border-b" style={{ backgroundColor: 'var(--color-bg-subtle)', borderColor: 'var(--color-border)' }}>
-              <tr>
-                <th className="px-4 sm:px-6 py-3 text-left text-xs uppercase tracking-wider font-sans" style={{ color: 'var(--color-text-muted)' }}>Request ID</th>
-                <th className="px-4 sm:px-6 py-3 text-left text-xs uppercase tracking-wider font-sans" style={{ color: 'var(--color-text-muted)' }}>Isotope</th>
-                <th className="px-4 sm:px-6 py-3 text-left text-xs uppercase tracking-wider font-sans" style={{ color: 'var(--color-text-muted)' }}>Quantity</th>
-                <th className="px-4 sm:px-6 py-3 text-left text-xs uppercase tracking-wider font-sans" style={{ color: 'var(--color-text-muted)' }}>Delivery Date</th>
-                <th className="px-4 sm:px-6 py-3 text-left text-xs uppercase tracking-wider font-sans" style={{ color: 'var(--color-text-muted)' }}>Status</th>
-                <th className="px-4 sm:px-6 py-3 text-left text-xs text-muted-foreground uppercase tracking-wider font-sans">Manufacturers</th>
-                <th className="px-4 sm:px-6 py-3 text-left text-xs text-muted-foreground uppercase tracking-wider font-sans">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {procurementRequests.map((request) => (
-                <tr key={request.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-mono">{request.id}</td>
-                  <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm">{request.isotope}</td>
-                  <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm">{request.quantity}</td>
-                  <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm">
-                    {new Date(request.deliveryDate).toLocaleDateString()}
-                  </td>
-                  <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
-                    <span className={`px-2 sm:px-3 py-1 rounded-full text-xs ${request.statusColor}`}>
-                      {request.status}
-                    </span>
-                  </td>
-                  <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-foreground">{request.matchedManufacturers}</td>
-                  <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm">
-                    <div className="flex items-center gap-2">
-                      <button 
-                        onClick={() => request.status === 'Quotes Received' && setView('quotes')}
-                        className="p-2 hover:bg-muted rounded-lg transition-colors"
-                        title="View"
-                      >
-                        <Eye className="w-4 h-4 text-muted-foreground" />
-                      </button>
-                      <button 
-                        onClick={() => handleEdit(request)}
-                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors" 
-                        title="Edit"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={() => handleDelete(request.id)}
-                        className="p-2 hover:bg-red-100 rounded-lg transition-colors text-red-600" 
-                        title="Delete"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          </div>
+          {isLoading ? (
+            <div className="p-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-purple-600" /></div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px]">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Delivery</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {requests.map((request) => (
+                    <tr key={request.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap text-xs sm:text-sm font-mono text-purple-600">{request.id.substring(0, 8)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{request.product?.name}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{request.quantity}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {request.delivery_date ? new Date(request.delivery_date).toLocaleDateString() : 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          {request.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{request.priority}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <div className="flex gap-2">
+                          <button onClick={() => handleEdit(request)} className="p-1 hover:text-purple-600"><Edit className="w-4 h-4" /></button>
+                          <button onClick={() => handleDelete(request.id)} className="p-1 hover:text-red-600"><X className="w-4 h-4" /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {requests.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-12 text-center text-gray-500">No requests found.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </DesktopOnly>
 
-        {/* Mobile Card View */}
         <MobileOnly>
-          <div className="p-4 space-y-3">
-            {procurementRequests.map((request) => (
-              <MobileTableCard key={request.id}>
-                <MobileTableCardRow 
-                  label="ID" 
-                  value={<span className="font-mono text-xs">{request.id}</span>} 
-                />
-                <MobileTableCardRow 
-                  label="Isotope" 
-                  value={request.isotope} 
-                />
-                <MobileTableCardRow 
-                  label="Quantity" 
-                  value={request.quantity} 
-                />
-                <MobileTableCardRow 
-                  label="Delivery" 
-                  value={new Date(request.deliveryDate).toLocaleDateString()} 
-                />
-                <MobileTableCardRow 
-                  label="Status" 
-                  value={
-                    <span className={`px-2 py-1 rounded-full text-xs ${request.statusColor}`}>
-                      {request.status}
-                    </span>
-                  } 
-                />
-                <MobileTableCardRow 
-                  label="Manufacturers" 
-                  value={request.matchedManufacturers} 
-                />
-                <div className="flex items-center gap-2 pt-2 border-t border-gray-200">
-                  <button 
-                    type="button"
-                    onClick={() => request.status === 'Quotes Received' && setView('quotes')}
-                    className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 text-sm min-h-[44px] font-sans"
-                  >
-                    <Eye className="w-4 h-4" />
-                    View
-                  </button>
-                  <button 
-                    type="button"
-                    onClick={() => handleEdit(request)}
-                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 text-sm min-h-[44px]"
-                  >
-                    <Edit className="w-4 h-4" />
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(request.id)}
-                    className="px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors flex items-center justify-center min-h-[44px]"
-                    aria-label="Delete request"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              </MobileTableCard>
-            ))}
-          </div>
+          {isLoading ? (
+            <div className="p-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-purple-600" /></div>
+          ) : (
+            <div className="p-4 space-y-3">
+              {requests.map((request) => (
+                <MobileTableCard key={request.id}>
+                  <MobileTableCardRow label="ID" value={<span className="font-mono text-xs text-purple-600">{request.id.substring(0, 8)}</span>} />
+                  <MobileTableCardRow label="Product" value={request.product?.name} />
+                  <MobileTableCardRow label="Quantity" value={request.quantity} />
+                  <MobileTableCardRow label="Status" value={<span className="px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">{request.status}</span>} />
+                  <div className="flex gap-2 pt-2 border-t">
+                    <button onClick={() => handleEdit(request)} className="flex-1 flex items-center justify-center gap-2 py-2 border rounded-lg"><Edit className="w-4 h-4" /> Edit</button>
+                    <button onClick={() => handleDelete(request.id)} className="px-3 border rounded-lg text-red-600"><X className="w-4 h-4" /></button>
+                  </div>
+                </MobileTableCard>
+              ))}
+            </div>
+          )}
         </MobileOnly>
-
-        {/* Pagination */}
-        <div className="px-4 sm:px-6 py-4 border-t border-border flex flex-col sm:flex-row items-center justify-end gap-3">
-          <div className="flex items-center gap-2">
-            <button type="button" className="px-3 py-1 border border-input rounded bg-gray-100 text-gray-400 cursor-not-allowed opacity-60 text-sm min-h-[44px]" disabled>Previous</button>
-            <button type="button" className="px-3 py-1 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60 rounded text-sm min-h-[44px]" disabled>1</button>
-            <button type="button" className="px-3 py-1 border border-input rounded bg-gray-100 text-gray-400 cursor-not-allowed opacity-60 text-sm min-h-[44px]" disabled>Next</button>
-          </div>
-        </div>
       </div>
     </div>
   );
