@@ -48,33 +48,13 @@ function ProcurementContent() {
     async function fetchData() {
       setIsLoading(true);
       try {
-        console.log('Fetching products...');
         const prodList = await getProducts();
         setProducts(prodList);
-        console.log('Products fetched successfully:', prodList.length);
-
-        console.log('Fetching procurements...');
         const reqList = await getProcurements();
         setRequests(reqList);
-        console.log('Procurements fetched successfully:', reqList.length);
       } catch (error: any) {
-        // More descriptive error logging
         const errorMessage = error?.message || 'Unknown error occurred';
-        const errorDetail = error?.details || '';
-        const errorHint = error?.hint || '';
-
-        console.error('Procurement Fetch Error Message:', errorMessage);
-        console.error('Procurement Fetch Error Details:', errorDetail);
-        console.error('Procurement Fetch Error Hint:', errorHint);
-        console.error('Full Error Object Trace:', error);
-
-        // Log specifically as string for some environments
-        try {
-          console.error('Stringified Error:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
-        } catch (e) {
-          console.error('Could not stringify error object');
-        }
-
+        console.error('Procurement Fetch Error:', error);
         toast.error(`Failed to load procurement data: ${errorMessage}`);
 
         if (errorMessage.includes('relation "public.products" does not exist')) {

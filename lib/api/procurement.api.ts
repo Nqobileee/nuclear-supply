@@ -33,7 +33,6 @@ export async function getProducts() {
 
 export async function getProcurements() {
     const supabase = createClient();
-    console.log('Querying procurements table...');
     const { data, error } = await supabase
         .from('procurements')
         .select(`
@@ -42,16 +41,7 @@ export async function getProcurements() {
     `)
         .order('created_at', { ascending: false });
 
-    if (error) {
-        console.error('Supabase Query Error (procurements):', {
-            message: error.message,
-            details: error.details,
-            hint: error.hint,
-            code: error.code
-        });
-        console.error('Full Error Object:', error);
-        throw error;
-    }
+    if (error) throw error;
 
     // Map products to product property to maintain interface compatibility
     const mappedData = (data || []).map((item: any) => ({

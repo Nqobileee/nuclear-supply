@@ -13,12 +13,15 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Public profiles are viewable by everyone" ON public.profiles;
 CREATE POLICY "Public profiles are viewable by everyone" 
 ON public.profiles FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Users can insert their own profile" ON public.profiles;
 CREATE POLICY "Users can insert their own profile" 
 ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 CREATE POLICY "Users can update own profile" 
 ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
@@ -57,12 +60,15 @@ CREATE TABLE IF NOT EXISTS public.shipments (
 
 ALTER TABLE public.shipments ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Shipments are viewable by authenticated users" ON public.shipments;
 CREATE POLICY "Shipments are viewable by authenticated users" 
 ON public.shipments FOR SELECT TO authenticated USING (true);
 
+DROP POLICY IF EXISTS "Authenticated users can create shipments" ON public.shipments;
 CREATE POLICY "Authenticated users can create shipments" 
 ON public.shipments FOR INSERT TO authenticated WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Authenticated users can update shipments" ON public.shipments;
 CREATE POLICY "Authenticated users can update shipments" 
 ON public.shipments FOR UPDATE TO authenticated USING (true);
 
@@ -78,6 +84,7 @@ CREATE TABLE IF NOT EXISTS public.compliance_alerts (
 
 ALTER TABLE public.compliance_alerts ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Alerts are viewable by authenticated users" ON public.compliance_alerts;
 CREATE POLICY "Alerts are viewable by authenticated users" 
 ON public.compliance_alerts FOR SELECT TO authenticated USING (true);
 
@@ -92,6 +99,7 @@ CREATE TABLE IF NOT EXISTS public.permits (
 
 ALTER TABLE public.permits ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Permits are viewable by authenticated users" ON public.permits;
 CREATE POLICY "Permits are viewable by authenticated users" 
 ON public.permits FOR SELECT TO authenticated USING (true);
 
@@ -106,9 +114,11 @@ CREATE TABLE IF NOT EXISTS public.activities (
 
 ALTER TABLE public.activities ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Activities are viewable by authenticated users" ON public.activities;
 CREATE POLICY "Activities are viewable by authenticated users" 
 ON public.activities FOR SELECT TO authenticated USING (true);
 
+DROP POLICY IF EXISTS "Users can insert activities" ON public.activities;
 CREATE POLICY "Users can insert activities" 
 ON public.activities FOR INSERT TO authenticated WITH CHECK (true);
 
@@ -124,8 +134,10 @@ CREATE TABLE IF NOT EXISTS public.deliveries (
 
 ALTER TABLE public.deliveries ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Deliveries viewable by authenticated users" ON public.deliveries;
 CREATE POLICY "Deliveries viewable by authenticated users" 
 ON public.deliveries FOR SELECT TO authenticated USING (true);
+
 -- 7. PRODUCTS
 CREATE TABLE IF NOT EXISTS public.products (
   id TEXT PRIMARY KEY,
@@ -138,6 +150,8 @@ CREATE TABLE IF NOT EXISTS public.products (
 );
 
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Products viewable by authenticated users" ON public.products;
 CREATE POLICY "Products viewable by authenticated users" ON public.products FOR SELECT TO authenticated USING (true);
 
 -- 8. PROCUREMENT REQUESTS
@@ -154,8 +168,14 @@ CREATE TABLE IF NOT EXISTS public.procurements (
 );
 
 ALTER TABLE public.procurements ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Procurements viewable by authenticated users" ON public.procurements;
 CREATE POLICY "Procurements viewable by authenticated users" ON public.procurements FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "Users can insert procurements" ON public.procurements;
 CREATE POLICY "Users can insert procurements" ON public.procurements FOR INSERT TO authenticated WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Users can update own procurements" ON public.procurements;
 CREATE POLICY "Users can update own procurements" ON public.procurements FOR UPDATE TO authenticated USING (true);
 
 -- 9. AUDIT TRAIL (Traceability)
@@ -174,7 +194,11 @@ CREATE TABLE IF NOT EXISTS public.audit_trail (
 );
 
 ALTER TABLE public.audit_trail ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Audit trail viewable by authenticated users" ON public.audit_trail;
 CREATE POLICY "Audit trail viewable by authenticated users" ON public.audit_trail FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "System can insert audit trail" ON public.audit_trail;
 CREATE POLICY "System can insert audit trail" ON public.audit_trail FOR INSERT TO authenticated WITH CHECK (true);
 
 -- Seed Products from Spreadsheet
@@ -196,3 +220,6 @@ ON CONFLICT (id) DO UPDATE SET
   dosage_form = EXCLUDED.dosage_form,
   strength = EXCLUDED.strength,
   gtin = EXCLUDED.gtin;
+
+-- Force Cache Reload
+NOTIFY pgrst, 'reload schema';
