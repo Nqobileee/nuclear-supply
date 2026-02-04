@@ -13,39 +13,28 @@ import DashboardGreeting from '@/components/DashboardGreeting'
 import UpcomingDeliveries from '@/components/shared/UpcomingDeliveries'
 import RecentActivity from '@/components/shared/RecentActivity'
 import { LiveTrackingMap } from '@/components/dashboard'
-import { 
-  MobileOnly, 
-  DesktopOnly, 
-  MobileTableCard, 
-  MobileTableCardRow 
+import {
+  MobileOnly,
+  DesktopOnly,
+  MobileTableCard,
+  MobileTableCardRow
 } from '@/components/responsive'
 
 export default async function DashboardPage() {
-
-  // MOCK DATA FOR DASHBOARD
-  const recentActivity = [
-    { id: 1, event: 'Shipment SH-2851 dispatched from Johannesburg', time: '5 min ago' },
-    { id: 2, event: 'Compliance alert issued for SH-2850', time: '30 min ago' },
-    { id: 3, event: 'New procurement request submitted', time: '1 hour ago' },
-    { id: 4, event: 'Delivery completed for SH-2849', time: '2 hours ago' },
-    { id: 5, event: 'Quote received for PR-2847', time: '3 hours ago' },
-  ];
-
-  const activeShipments = [
-    { id: 'SH-2851', isotope: 'Tc-99m', origin: 'Johannesburg', destination: 'Cape Town', status: 'In Transit', eta: '2 hours' },
-    { id: 'SH-2850', isotope: 'F-18', origin: 'Nairobi', destination: 'Mombasa', status: 'At Customs', eta: '4 hours' },
-    { id: 'SH-2849', isotope: 'I-131', origin: 'Lagos', destination: 'Accra', status: 'Dispatched', eta: '6 hours' },
-    { id: 'SH-2848', isotope: 'FDG', origin: 'Durban', destination: 'Pretoria', status: 'In Transit', eta: '3 hours' },
-    { id: 'SH-2847', isotope: 'Tc-99m', origin: 'Gaborone', destination: 'Windhoek', status: 'Delivered', eta: 'Delivered' },
-  ];
-
-  const complianceAlerts = [
-    { id: 1, title: 'Missing Certificate', description: 'Shipment SH-2850 is missing a compliance certificate.', severity: 'warning' },
-  ];
-
-  const upcomingDeliveries = [
-    { id: 'DEL-1001', date: '2026-01-21', time: '09:00', isotope: 'Tc-99m', destination: 'Cape Town', status: 'upcoming' as const },
-  ];
+  // Fetch real data from Supabase
+  const [
+    recentActivity,
+    activeShipments,
+    complianceAlerts,
+    upcomingDeliveries,
+    dashboardStats
+  ] = await Promise.all([
+    getRecentActivity(5),
+    getActiveShipments(),
+    getComplianceAlerts(),
+    getUpcomingDeliveries(4),
+    getDashboardStats()
+  ])
 
   const getStatusColor = (status: string): string => {
     switch (status) {
@@ -83,19 +72,26 @@ export default async function DashboardPage() {
         <div className="lg:col-span-2 dashboard-card p-4 sm:p-6 border rounded-lg">
           <h3 className="dashboard-title text-lg sm:text-xl mb-4">Recent Activity</h3>
           <div className="space-y-3 sm:space-y-4">
-            {recentActivity.slice(0, 3).map((activity) => (
-              <div key={activity.id} className="flex gap-3">
-                <div className="flex-shrink-0 w-2 h-2 rounded-full mt-2" style={{ backgroundColor: 'var(--color-primary)' }}></div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm" style={{ color: 'var(--color-text-main)' }}>{activity.event}</p>
-                  <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>{activity.time}</p>
+            {recentActivity.length > 0 ? (
+              recentActivity.map((activity) => (
+                <div key={activity.id} className="flex gap-3">
+                  <div className="flex-shrink-0 w-2 h-2 rounded-full mt-2" style={{ backgroundColor: 'var(--color-primary)' }}></div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm" style={{ color: 'var(--color-text-main)' }}>{activity.event}</p>
+                    <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>{activity.time}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
-            {/* Show more button on mobile */}
-            <button type="button" className="md:hidden w-full text-center text-sm py-3 rounded-md border border-dashed transition-colors touch-manipulation min-h-[44px]" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>
-              View All Activity
-            </button>
+              ))
+            ) : (
+              <div className="text-sm text-gray-500 italic py-4 text-center">No recent activity</div>
+            )}
+
+            {/* Show more button on mobile - Only show if there is activity */}
+            {recentActivity.length > 0 && (
+              <button type="button" className="md:hidden w-full text-center text-sm py-3 rounded-md border border-dashed transition-colors touch-manipulation min-h-[44px]" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>
+                View All Activity
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -109,7 +105,7 @@ export default async function DashboardPage() {
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>
-        
+
         {/* Desktop Table View */}
         <DesktopOnly>
           <div className="overflow-x-auto">
@@ -124,21 +120,32 @@ export default async function DashboardPage() {
                 </tr>
               </thead>
               <tbody className="divide-y" style={{ backgroundColor: 'var(--color-bg-white)', borderColor: 'var(--color-border)' }}>
-                {activeShipments.slice(0, 5).map((shipment) => (
-                  <tr key={shipment.id} className="dashboard-table-row">
-                    <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-mono" style={{ color: 'var(--color-text-main)' }}>{shipment.id}</td>
-                    <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm" style={{ color: 'var(--color-text-main)' }}>{shipment.isotope}</td>
-                    <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm" style={{ color: 'var(--color-text-main)' }}>
-                      {shipment.origin} → {shipment.destination}
+                {activeShipments.length > 0 ? (
+                  activeShipments.slice(0, 5).map((shipment) => (
+                    <tr key={shipment.id} className="dashboard-table-row">
+                      <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-mono" style={{ color: 'var(--color-text-main)' }}>{shipment.id}</td>
+                      <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm" style={{ color: 'var(--color-text-main)' }}>{shipment.isotope}</td>
+                      <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm" style={{ color: 'var(--color-text-main)' }}>
+                        {shipment.origin} → {shipment.destination}
+                      </td>
+                      <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                        <span className={`px-2 sm:px-3 py-1 rounded-full text-xs ${getStatusColor(shipment.status)}`}>
+                          {shipment.status}
+                        </span>
+                      </td>
+                      {/* Note: 'eta' might be a date string from DB, formatting might be needed. Using raw for now as schema says timestamptz but UI might expect string */}
+                      <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm" style={{ color: 'var(--color-text-main)' }}>
+                        {new Date(shipment.eta).toLocaleDateString()}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="px-4 sm:px-6 py-8 text-center text-sm text-gray-500 italic">
+                      No active shipments found.
                     </td>
-                    <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
-                      <span className={`px-2 sm:px-3 py-1 rounded-full text-xs ${getStatusColor(shipment.status)}`}>
-                        {shipment.status}
-                      </span>
-                    </td>
-                    <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm" style={{ color: 'var(--color-text-main)' }}>{shipment.eta}</td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
@@ -147,38 +154,44 @@ export default async function DashboardPage() {
         {/* Mobile Card View */}
         <MobileOnly>
           <div className="p-4 space-y-3">
-            {activeShipments.slice(0, 5).map((shipment) => (
-              <MobileTableCard key={shipment.id}>
-                <MobileTableCardRow 
-                  label="ID" 
-                  value={<span className="font-mono text-xs">{shipment.id}</span>} 
-                />
-                <MobileTableCardRow 
-                  label="Isotope" 
-                  value={shipment.isotope} 
-                />
-                <MobileTableCardRow 
-                  label="Route" 
-                  value={
-                    <span className="text-xs">
-                      {shipment.origin} → {shipment.destination}
-                    </span>
-                  } 
-                />
-                <MobileTableCardRow 
-                  label="Status" 
-                  value={
-                    <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(shipment.status)}`}>
-                      {shipment.status}
-                    </span>
-                  } 
-                />
-                <MobileTableCardRow 
-                  label="ETA" 
-                  value={shipment.eta} 
-                />
-              </MobileTableCard>
-            ))}
+            {activeShipments.length > 0 ? (
+              activeShipments.slice(0, 5).map((shipment) => (
+                <MobileTableCard key={shipment.id}>
+                  <MobileTableCardRow
+                    label="ID"
+                    value={<span className="font-mono text-xs">{shipment.id}</span>}
+                  />
+                  <MobileTableCardRow
+                    label="Isotope"
+                    value={shipment.isotope}
+                  />
+                  <MobileTableCardRow
+                    label="Route"
+                    value={
+                      <span className="text-xs">
+                        {shipment.origin} → {shipment.destination}
+                      </span>
+                    }
+                  />
+                  <MobileTableCardRow
+                    label="Status"
+                    value={
+                      <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(shipment.status)}`}>
+                        {shipment.status}
+                      </span>
+                    }
+                  />
+                  <MobileTableCardRow
+                    label="ETA"
+                    value={new Date(shipment.eta).toLocaleDateString()}
+                  />
+                </MobileTableCard>
+              ))
+            ) : (
+              <div className="text-center text-sm text-gray-500 italic py-4">
+                No active shipments found.
+              </div>
+            )}
           </div>
         </MobileOnly>
       </div>
@@ -194,17 +207,17 @@ export default async function DashboardPage() {
                 <div
                   key={alert.id}
                   className={`flex items-start gap-3 p-4 rounded-lg border ${alert.severity === 'warning'
-                      ? 'bg-amber-50 border-amber-200'
-                      : alert.severity === 'error'
-                        ? 'bg-red-50 border-red-200'
-                        : 'bg-blue-50 border-blue-200'
+                    ? 'bg-amber-50 border-amber-200'
+                    : alert.severity === 'error'
+                      ? 'bg-red-50 border-red-200'
+                      : 'bg-blue-50 border-blue-200'
                     }`}
                 >
                   <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${alert.severity === 'warning'
-                      ? 'bg-amber-600'
-                      : alert.severity === 'error'
-                        ? 'bg-red-600'
-                        : 'bg-blue-600'
+                    ? 'bg-amber-600'
+                    : alert.severity === 'error'
+                      ? 'bg-red-600'
+                      : 'bg-blue-600'
                     }`}></div>
                   <div>
                     <p className="text-sm" style={{ color: 'var(--color-text-main)' }}>{alert.title}</p>
@@ -225,7 +238,7 @@ export default async function DashboardPage() {
         </div>
 
         {/* Upcoming Deliveries */}
-        <UpcomingDeliveries 
+        <UpcomingDeliveries
           initialDeliveries={upcomingDeliveries}
         />
       </div>

@@ -222,3 +222,36 @@ export async function getActiveShipments(): Promise<Shipment[]> {
 
     return (data as Shipment[]) || []
 }
+
+export type SearchResults = {
+    shipments: Shipment[]
+    alerts: ComplianceAlert[]
+    activities: Activity[]
+}
+
+export async function searchGlobal(query: string): Promise<SearchResults> {
+    const supabase = await createClient()
+    const searchQuery = `%${query}%`
+
+    // Parallelize search queries
+    const [shipmentsRes, alertsRes, activitiesRes] = await Promise.all([
+        supabase
+            .from('shipments')
+            .select('*')
+            .or(`isotope.ilike.${searchQuery},origin.ilike.${searchQuery},destination.ilike.${searchQuery},id.ilike.${searchQuery}`),
+        supabase
+            .from('compliance_alerts')
+            .select('*')
+            .or(`title.ilike.${searchQuery},description.ilike.${searchQuery}`),
+        supabase
+            .from('activities')
+            .select('*')
+            .ilike('event', searchQuery)
+    ])
+
+    return {
+        shipments: (shipmentsRes.data as Shipment[]) || [],
+        alerts: (alertsRes.data as ComplianceAlert[]) || [],
+        activities: (activitiesRes.data as Activity[]) || []
+    }
+}
