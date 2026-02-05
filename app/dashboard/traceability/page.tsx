@@ -43,9 +43,17 @@ export default function TraceabilityPage() {
         .from('audit_trail')
         .select('*')
         .or(`shipment_id.eq.${selectedShipment},procurement_id.eq.${selectedShipment}`)
-        .order('created_at', { ascending: false });
+        .order('timestamp', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Audit Trail Fetch Error:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        throw error;
+      }
       setAuditEvents(data || []);
     } catch (error) {
       console.error('Error fetching audit trail:', error);
@@ -244,11 +252,11 @@ export default function TraceabilityPage() {
                     <div className="bg-gray-50 rounded-3xl p-6 border border-transparent hover:border-gray-100 hover:bg-white transition-all shadow-sm hover:shadow-xl hover:shadow-gray-100/50">
                       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
                         <div>
-                          <h4 className="text-lg font-bold text-gray-900 mb-1">{event.action || event.description}</h4>
+                          <h4 className="text-lg font-bold text-gray-900 mb-1">{event.event_type || event.description}</h4>
                           <div className="flex flex-wrap items-center gap-4 text-[10px] font-bold uppercase tracking-widest text-gray-400">
                             <span className="flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-lg border border-gray-100">
                               <Clock className="w-3 h-3" />
-                              {new Date(event.created_at).toLocaleString()}
+                              {new Date(event.timestamp).toLocaleString()}
                             </span>
                             <span className="flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-lg border border-gray-100">
                               <User className="w-3 h-3" />
@@ -265,7 +273,7 @@ export default function TraceabilityPage() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                         <div className="p-4 bg-white rounded-2xl border border-gray-100">
                           <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1 block">Contextual Details</span>
-                          <p className="text-sm text-gray-600 font-medium">{event.details || event.description}</p>
+                          <p className="text-sm text-gray-600 font-medium">{event.description}</p>
                         </div>
                         <div className="p-4 bg-white rounded-2xl border border-gray-100">
                           <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1 block">Verification Source</span>
