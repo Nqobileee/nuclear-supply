@@ -24,6 +24,7 @@ export default function CompliancePage() {
 
   useEffect(() => {
     async function fetchData() {
+      setIsLoading(true);
       const { data, error } = await supabase
         .from('compliance_alerts')
         .select('*')
@@ -37,6 +38,21 @@ export default function CompliancePage() {
       setIsLoading(false);
     }
     fetchData();
+
+    // Real-time subscription
+    const channel = supabase
+      .channel('compliance-alerts-page')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'compliance_alerts' }, (payload) => {
+        setAlerts(prev => [payload.new, ...prev]);
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'compliance_alerts' }, (payload) => {
+        setAlerts(prev => prev.filter(alert => alert.id !== payload.old.id));
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [supabase]);
 
   const documents = [

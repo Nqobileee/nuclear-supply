@@ -8,6 +8,7 @@ import {
     StatCard
 } from '@/models'
 import { combineDateAndTime } from '@/lib/dateUtils'
+import { Procurement, Product } from '@/lib/api/procurement.api'
 
 // --- Data Fetching Functions ---
 
@@ -123,7 +124,7 @@ export async function getRecentActivity(limit: number = 5): Promise<Activity[]> 
 export async function getUpcomingDeliveries(limit: number = 4): Promise<Delivery[]> {
     const supabase = await createClient()
     const now = new Date()
-    
+
     // Get deliveries from today onwards
     const { data, error } = await supabase
         .from('deliveries')
@@ -131,21 +132,21 @@ export async function getUpcomingDeliveries(limit: number = 4): Promise<Delivery
         .gte('date', now.toISOString().split('T')[0]) // From today
         .order('date', { ascending: true })
         .order('time', { ascending: true })
-    
+
     if (error) {
         console.error('Failed to fetch upcoming deliveries:', error)
         return []
     }
-    
+
     if (!data || data.length === 0) {
         return []
     }
-    
+
     // Filter out past deliveries and add scheduled_datetime using utility function
     const upcomingDeliveries = (data as Delivery[])
         .map((delivery) => {
             const scheduledDateTime = combineDateAndTime(delivery.date, delivery.time)
-            
+
             return {
                 ...delivery,
                 scheduled_datetime: scheduledDateTime,
@@ -154,7 +155,7 @@ export async function getUpcomingDeliveries(limit: number = 4): Promise<Delivery
         })
         .filter(delivery => delivery.scheduled_datetime && delivery.scheduled_datetime > now)
         .slice(0, limit)
-    
+
     return upcomingDeliveries
 }
 
@@ -162,7 +163,7 @@ export async function getCompletedDeliveries(hoursBack: number = 24): Promise<De
     const supabase = await createClient()
     const now = new Date()
     const cutoffDate = new Date(now.getTime() - (hoursBack * 60 * 60 * 1000))
-    
+
     // Get deliveries from the past 24 hours
     const { data, error } = await supabase
         .from('deliveries')
@@ -170,33 +171,33 @@ export async function getCompletedDeliveries(hoursBack: number = 24): Promise<De
         .gte('date', cutoffDate.toISOString().split('T')[0])
         .order('date', { ascending: false })
         .order('time', { ascending: false })
-    
+
     if (error) {
         console.error('Failed to fetch completed deliveries:', error)
         return []
     }
-    
+
     if (!data || data.length === 0) {
         return []
     }
-    
+
     // Filter to get only completed deliveries (past scheduled time) using utility function
     const completedDeliveries = (data as Delivery[])
         .map((delivery) => {
             const scheduledDateTime = combineDateAndTime(delivery.date, delivery.time)
-            
+
             return {
                 ...delivery,
                 scheduled_datetime: scheduledDateTime,
                 status: 'completed' as const
             }
         })
-        .filter(delivery => 
-            delivery.scheduled_datetime && 
+        .filter(delivery =>
+            delivery.scheduled_datetime &&
             delivery.scheduled_datetime <= now &&
             delivery.scheduled_datetime >= cutoffDate
         )
-    
+
     return completedDeliveries
 }
 
@@ -227,6 +228,7 @@ export type SearchResults = {
     shipments: Shipment[]
     alerts: ComplianceAlert[]
     activities: Activity[]
+    procurements: (Procurement & { products: Product })[]
 }
 
 export async function searchGlobal(query: string): Promise<SearchResults> {
@@ -234,11 +236,11 @@ export async function searchGlobal(query: string): Promise<SearchResults> {
     const searchQuery = `%${query}%`
 
     // Parallelize search queries
-    const [shipmentsRes, alertsRes, activitiesRes] = await Promise.all([
+    const [shipmentsRes, alertsRes, activitiesRes, procurementsRes] = await Promise.all([
         supabase
             .from('shipments')
             .select('*')
-            .or(`isotope.ilike.${searchQuery},origin.ilike.${searchQuery},destination.ilike.${searchQuery},id.ilike.${searchQuery}`),
+            .or(`isotope.ilike.${searchQuery},origin.ilike.${searchQuery},destination.ilike.${searchQuery}`),
         supabase
             .from('compliance_alerts')
             .select('*')
@@ -246,12 +248,20 @@ export async function searchGlobal(query: string): Promise<SearchResults> {
         supabase
             .from('activities')
             .select('*')
-            .ilike('event', searchQuery)
+            .ilike('event', searchQuery),
+        supabase
+            .from('procurements')
+            .select(`
+                *,
+                products (*)
+            `)
+            .or(`status.ilike.${searchQuery},priority.ilike.${searchQuery}`)
     ])
 
     return {
         shipments: (shipmentsRes.data as Shipment[]) || [],
         alerts: (alertsRes.data as ComplianceAlert[]) || [],
-        activities: (activitiesRes.data as Activity[]) || []
+        activities: (activitiesRes.data as Activity[]) || [],
+        procurements: (procurementsRes.data as any[]) || []
     }
 }

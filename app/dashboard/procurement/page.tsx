@@ -31,6 +31,8 @@ function ProcurementContent() {
   const [products, setProducts] = useState<Product[]>([]);
   const [requests, setRequests] = useState<Procurement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All Statuses');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form State
@@ -255,6 +257,17 @@ function ProcurementContent() {
     );
   }
 
+  const filteredRequests = requests.filter(req => {
+    const matchesSearch =
+      req.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      req.product?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      req.product?.brand?.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const matchesStatus = statusFilter === 'All Statuses' || req.status === statusFilter;
+
+    return matchesSearch && matchesStatus;
+  });
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-3">
@@ -274,15 +287,24 @@ function ProcurementContent() {
           <input
             type="text"
             placeholder="Search requests..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent"
           />
         </div>
         <div className="flex flex-col sm:flex-row gap-3 sm:gap-2">
-          <select className="px-4 py-2 border border-gray-300 rounded-lg bg-white">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg bg-white"
+          >
             <option>All Statuses</option>
             <option>Pending</option>
             <option>Approved</option>
             <option>Ordered</option>
+            <option>In Transit</option>
+            <option>Completed</option>
+            <option>Cancelled</option>
           </select>
           <button className="px-4 py-2 border border-gray-300 rounded-lg bg-white flex items-center justify-center gap-2">
             <Filter className="w-4 h-4" />
@@ -310,7 +332,7 @@ function ProcurementContent() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {requests.map((request) => (
+                  {filteredRequests.map((request) => (
                     <tr key={request.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap text-xs sm:text-sm font-mono text-purple-600">{request.id.substring(0, 8)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{request.product?.name}</td>
@@ -332,7 +354,7 @@ function ProcurementContent() {
                       </td>
                     </tr>
                   ))}
-                  {requests.length === 0 && (
+                  {filteredRequests.length === 0 && (
                     <tr>
                       <td colSpan={7} className="px-6 py-12 text-center text-gray-500">No requests found.</td>
                     </tr>
@@ -348,7 +370,7 @@ function ProcurementContent() {
             <div className="p-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-purple-600" /></div>
           ) : (
             <div className="p-4 space-y-3">
-              {requests.map((request) => (
+              {filteredRequests.map((request) => (
                 <MobileTableCard key={request.id}>
                   <MobileTableCardRow label="ID" value={<span className="font-mono text-xs text-purple-600">{request.id.substring(0, 8)}</span>} />
                   <MobileTableCardRow label="Product" value={request.product?.name} />

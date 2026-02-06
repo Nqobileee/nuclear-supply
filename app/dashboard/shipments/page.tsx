@@ -12,6 +12,8 @@ export default function ShipmentsPage() {
   const [activeTab, setActiveTab] = useState('tracking');
   const [shipments, setShipments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All Statuses');
 
   const supabase = createClient();
 
@@ -305,6 +307,18 @@ export default function ShipmentsPage() {
     );
   }
 
+  const filteredShipments = shipments.filter(s => {
+    const matchesSearch =
+      s.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.isotope.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.origin.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.destination.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const matchesStatus = statusFilter === 'All Statuses' || s.status === statusFilter;
+
+    return matchesSearch && matchesStatus;
+  });
+
   return (
     <div className="animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
@@ -335,12 +349,18 @@ export default function ShipmentsPage() {
           <input
             type="text"
             placeholder="Search by ID, Origin or Destination..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-600/20 focus:border-purple-600 outline-none transition-all text-sm"
           />
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative">
-            <select className="pl-4 pr-10 py-2.5 border border-gray-200 rounded-xl bg-white text-sm outline-none focus:ring-2 focus:ring-purple-600/20 appearance-none min-w-[140px]">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="pl-4 pr-10 py-2.5 border border-gray-200 rounded-xl bg-white text-sm outline-none focus:ring-2 focus:ring-purple-600/20 appearance-none min-w-[140px]"
+            >
               <option>All Statuses</option>
               <option>Pending</option>
               <option>Dispatched</option>
@@ -380,7 +400,7 @@ export default function ShipmentsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {shipments.map((shipment) => (
+                    {filteredShipments.map((shipment) => (
                       <tr
                         key={shipment.id}
                         className="hover:bg-purple-50/30 transition-all cursor-pointer group"
@@ -439,7 +459,7 @@ export default function ShipmentsPage() {
 
             <MobileOnly>
               <div className="p-4 space-y-4">
-                {shipments.map((shipment) => (
+                {filteredShipments.map((shipment) => (
                   <MobileTableCard
                     key={shipment.id}
                     onClick={() => setSelectedShipment(shipment.id)}
