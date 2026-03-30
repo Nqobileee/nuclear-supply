@@ -1,4 +1,3 @@
-import { NextResponse, type NextRequest } from 'next/server'
 
 // Supabase session/auth removed. Always allow access, no session logic.
 import { NextResponse, type NextRequest } from 'next/server'

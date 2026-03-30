@@ -1,8 +1,5 @@
-import { cookies } from 'next/headers'
 
 // Supabase removed. Export a dummy server client for compatibility.
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 
 export async function createClient() {
   return {
