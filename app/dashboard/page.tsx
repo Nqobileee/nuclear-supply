@@ -21,20 +21,50 @@ import {
 } from '@/components/responsive'
 
 export default async function DashboardPage() {
-  // Fetch real data from Supabase
-  const [
-    recentActivity,
-    activeShipments,
-    complianceAlerts,
-    upcomingDeliveries,
-    dashboardStats
-  ] = await Promise.all([
-    getRecentActivity(5),
-    getActiveShipments(),
-    getComplianceAlerts(),
-    getUpcomingDeliveries(4),
-    getDashboardStats()
-  ])
+  // Use hardcoded Africa-focused data for instant loading
+  const recentActivity = [
+    { id: 1, description: 'Shipment arrived in Lagos, Nigeria', date: '2026-03-28' },
+    { id: 2, description: 'Compliance check passed in Nairobi, Kenya', date: '2026-03-27' },
+    { id: 3, description: 'Delivery completed in Accra, Ghana', date: '2026-03-26' },
+    { id: 4, description: 'Shipment dispatched from Johannesburg, South Africa', date: '2026-03-25' },
+    { id: 5, description: 'Customs cleared in Cairo, Egypt', date: '2026-03-24' },
+  ];
+  const activeShipments = [
+    { id: 1, status: 'In Transit', location: 'Lagos, Nigeria', eta: '2026-03-31' },
+    { id: 2, status: 'At Customs', location: 'Nairobi, Kenya', eta: '2026-04-02' },
+  ];
+  const complianceAlerts = [
+    { id: 1, severity: 'warning', message: 'Document renewal needed for Ghana', date: '2026-03-27' },
+  ];
+  const upcomingDeliveries = [
+    { id: 1, destination: 'Accra, Ghana', eta: '2026-03-31' },
+    { id: 2, destination: 'Lagos, Nigeria', eta: '2026-04-01' },
+    { id: 3, destination: 'Nairobi, Kenya', eta: '2026-04-02' },
+    { id: 4, destination: 'Cairo, Egypt', eta: '2026-04-03' },
+  ];
+  const dashboardStats = {
+    activeShipments: {
+      label: 'Active Shipments',
+      value: '2',
+      subtext: '100% on schedule',
+      color: 'from-blue-500 to-blue-600',
+      textColor: 'text-blue-600',
+    },
+    pendingRequests: {
+      label: 'Pending Requests',
+      value: '0',
+      subtext: '0 urgent',
+      color: 'from-amber-500 to-amber-600',
+      textColor: 'text-amber-600',
+    },
+    complianceStatus: {
+      label: 'Compliance Status',
+      value: 'Clear',
+      subtext: 'All requirements met',
+      color: 'from-green-500 to-green-600',
+      textColor: 'text-green-600',
+    },
+  };
 
   const getStatusColor = (status: string): string => {
     switch (status) {

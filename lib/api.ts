@@ -1,53 +1,29 @@
-import { createClient } from '@/lib/supabase/server'
 import {
-    Activity,
-    ComplianceAlert,
-    DashboardStats,
-    Delivery,
-    Shipment,
-    StatCard
+    Activity, ComplianceAlert, DashboardStats, Delivery, Shipment, StatCard
 } from '@/models'
 import { combineDateAndTime } from '@/lib/dateUtils'
 import { Procurement, Product } from '@/lib/api/procurement.api'
-
-// --- Data Fetching Functions ---
+import { mockAlerts, mockShipments, mockActivities, mockDeliveries, mockDeliveriesCompleted, mockProcurements } from './hardcoded-data'
 
 export async function getDashboardStats(): Promise<DashboardStats> {
-    const supabase = await createClient()
+    const active = mockShipments.filter(s => s.status !== 'Delivered')
+    const pending = mockShipments.filter(s => s.status === 'Pending')
+    const urgent = mockShipments.filter(s => s.status === 'At Customs')
 
-    // 1. Fetch Shipments for Stats
-    const { data: shipments } = await supabase
-        .from('shipments')
-        .select('*')
-
-    const allShipments = (shipments as Shipment[]) || []
-    const active = allShipments.filter(s => s.status !== 'Delivered')
-    const pending = allShipments.filter(s => s.status === 'Pending')
-    const urgent = allShipments.filter(s => s.status === 'At Customs')
-
-    // Calculate on-schedule percentage
-    const inTransitOrDispatched = allShipments.filter(s =>
+    const inTransitOrDispatched = mockShipments.filter(s =>
         s.status === 'In Transit' || s.status === 'Dispatched'
     )
     const onSchedulePercentage = active.length > 0 && inTransitOrDispatched.length > 0
         ? Math.round((inTransitOrDispatched.length / active.length) * 100)
         : 100
 
-    // 2. Fetch Compliance Alerts
-    const { data: alerts } = await supabase
-        .from('compliance_alerts')
-        .select('*')
-
-    const allAlerts = (alerts as ComplianceAlert[]) || []
-
-    // Determine compliance status
     let complianceValue = 'Clear'
     let complianceSubtext = 'All requirements met'
     let complianceColor = 'from-green-500 to-green-600'
     let complianceTextColor = 'text-green-600'
 
-    const criticalCount = allAlerts.filter(a => a.severity === 'error').length
-    const warningCount = allAlerts.filter(a => a.severity === 'warning').length
+    const criticalCount = mockAlerts.filter(a => a.severity === 'error').length
+    const warningCount = mockAlerts.filter(a => a.severity === 'warning').length
 
     if (criticalCount > 0) {
         complianceValue = 'Critical'
@@ -57,19 +33,11 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     } else if (warningCount > 0) {
         complianceValue = 'Warning'
         complianceSubtext = `${warningCount} items need attention`
-        complianceColor = 'from-amber-500 to-amber-600' // Changed to amber to match design
+        complianceColor = 'from-amber-500 to-amber-600'
         complianceTextColor = 'text-amber-600'
     }
 
-    // 3. Monthly Total (Mocked calculation for now, or real count)
-    // Let's count delivered items in current month
-    const now = new Date()
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
-    const { count: monthlyCount } = await supabase
-        .from('shipments')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'Delivered')
-        .gte('updated_at', startOfMonth)
+    const monthlyCount = mockShipments.filter(s => s.status === 'Delivered').length
 
     return {
         activeShipments: {
@@ -95,7 +63,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
         },
         monthlyTotal: {
             label: 'Monthly Total',
-            value: (monthlyCount || 0).toString(),
+            value: monthlyCount.toString(),
             subtext: 'Completed this month',
             color: 'from-purple-500 to-purple-600',
             textColor: 'text-purple-600'
@@ -104,124 +72,53 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 }
 
 export async function getRecentActivity(limit: number = 5): Promise<Activity[]> {
-    const supabase = await createClient()
-
-    const { data } = await supabase
-        .from('activities')
-        .select('*')
-        .order('time', { ascending: false })
-        .limit(limit)
-
-    // Format time for display if needed, but DB returns ISO string usually.
-    // The UI expects a string like "10:30 AM". 
-    // We should map the DB results.
-    return (data || []).map((a: any) => ({
-        ...a,
-        time: new Date(a.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-    })) as Activity[]
+    return mockActivities
+        .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
+        .slice(0, limit)
+        .map(a => ({
+            ...a,
+            time: new Date(a.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+        }))
 }
 
 export async function getUpcomingDeliveries(limit: number = 4): Promise<Delivery[]> {
-    const supabase = await createClient()
     const now = new Date()
-
-    // Get deliveries from today onwards
-    const { data, error } = await supabase
-        .from('deliveries')
-        .select('*')
-        .gte('date', now.toISOString().split('T')[0]) // From today
-        .order('date', { ascending: true })
-        .order('time', { ascending: true })
-
-    if (error) {
-        console.error('Failed to fetch upcoming deliveries:', error)
-        return []
-    }
-
-    if (!data || data.length === 0) {
-        return []
-    }
-
-    // Filter out past deliveries and add scheduled_datetime using utility function
-    const upcomingDeliveries = (data as Delivery[])
-        .map((delivery) => {
-            const scheduledDateTime = combineDateAndTime(delivery.date, delivery.time)
-
-            return {
-                ...delivery,
-                scheduled_datetime: scheduledDateTime,
-                status: 'upcoming' as const
-            }
-        })
+    return mockDeliveries
+        .map(delivery => ({
+            ...delivery,
+            scheduled_datetime: combineDateAndTime(delivery.date, delivery.time),
+            status: 'upcoming' as const
+        }))
         .filter(delivery => delivery.scheduled_datetime && delivery.scheduled_datetime > now)
+        .sort((a, b) => a.scheduled_datetime!.getTime() - b.scheduled_datetime!.getTime())
         .slice(0, limit)
-
-    return upcomingDeliveries
 }
 
 export async function getCompletedDeliveries(hoursBack: number = 24): Promise<Delivery[]> {
-    const supabase = await createClient()
     const now = new Date()
     const cutoffDate = new Date(now.getTime() - (hoursBack * 60 * 60 * 1000))
-
-    // Get deliveries from the past 24 hours
-    const { data, error } = await supabase
-        .from('deliveries')
-        .select('*')
-        .gte('date', cutoffDate.toISOString().split('T')[0])
-        .order('date', { ascending: false })
-        .order('time', { ascending: false })
-
-    if (error) {
-        console.error('Failed to fetch completed deliveries:', error)
-        return []
-    }
-
-    if (!data || data.length === 0) {
-        return []
-    }
-
-    // Filter to get only completed deliveries (past scheduled time) using utility function
-    const completedDeliveries = (data as Delivery[])
-        .map((delivery) => {
-            const scheduledDateTime = combineDateAndTime(delivery.date, delivery.time)
-
-            return {
-                ...delivery,
-                scheduled_datetime: scheduledDateTime,
-                status: 'completed' as const
-            }
-        })
+    return mockDeliveriesCompleted
+        .map(delivery => ({
+            ...delivery,
+            scheduled_datetime: combineDateAndTime(delivery.date, delivery.time),
+            status: 'completed' as const
+        }))
         .filter(delivery =>
             delivery.scheduled_datetime &&
             delivery.scheduled_datetime <= now &&
             delivery.scheduled_datetime >= cutoffDate
         )
-
-    return completedDeliveries
+        .sort((a, b) => b.scheduled_datetime!.getTime() - a.scheduled_datetime!.getTime())
 }
 
 export async function getComplianceAlerts(): Promise<ComplianceAlert[]> {
-    const supabase = await createClient()
-
-    const { data } = await supabase
-        .from('compliance_alerts')
-        .select('*')
-        .order('created_at', { ascending: false })
-
-    return (data as ComplianceAlert[]) || []
+    return [...mockAlerts].sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
 }
 
 export async function getActiveShipments(): Promise<Shipment[]> {
-    const supabase = await createClient()
-
-    const { data } = await supabase
-        .from('shipments')
-        .select('*')
-        .neq('status', 'Delivered')
-        .order('created_at', { ascending: false })
-
-    return (data as Shipment[]) || []
+    return mockShipments
+        .filter(s => s.status !== 'Delivered')
+        .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
 }
 
 export type SearchResults = {
@@ -232,36 +129,21 @@ export type SearchResults = {
 }
 
 export async function searchGlobal(query: string): Promise<SearchResults> {
-    const supabase = await createClient()
-    const searchQuery = `%${query}%`
-
-    // Parallelize search queries
-    const [shipmentsRes, alertsRes, activitiesRes, procurementsRes] = await Promise.all([
-        supabase
-            .from('shipments')
-            .select('*')
-            .or(`isotope.ilike.${searchQuery},origin.ilike.${searchQuery},destination.ilike.${searchQuery}`),
-        supabase
-            .from('compliance_alerts')
-            .select('*')
-            .or(`title.ilike.${searchQuery},description.ilike.${searchQuery}`),
-        supabase
-            .from('activities')
-            .select('*')
-            .ilike('event', searchQuery),
-        supabase
-            .from('procurements')
-            .select(`
-                *,
-                products (*)
-            `)
-            .or(`status.ilike.${searchQuery},priority.ilike.${searchQuery}`)
-    ])
-
+    const q = query.toLowerCase()
     return {
-        shipments: (shipmentsRes.data as Shipment[]) || [],
-        alerts: (alertsRes.data as ComplianceAlert[]) || [],
-        activities: (activitiesRes.data as Activity[]) || [],
-        procurements: (procurementsRes.data as any[]) || []
+        shipments: mockShipments.filter(s => 
+            s.isotope.toLowerCase().includes(q) || 
+            s.origin.toLowerCase().includes(q) || 
+            s.destination.toLowerCase().includes(q)
+        ),
+        alerts: mockAlerts.filter(a => 
+            a.title.toLowerCase().includes(q) || 
+            (a.description || '').toLowerCase().includes(q)
+        ),
+        activities: mockActivities.filter(a => a.event.toLowerCase().includes(q)),
+        procurements: mockProcurements.filter(p => 
+            p.status.toLowerCase().includes(q) || 
+            p.priority.toLowerCase().includes(q)
+        )
     }
 }

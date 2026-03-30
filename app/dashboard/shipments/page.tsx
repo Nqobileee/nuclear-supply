@@ -10,29 +10,17 @@ export default function ShipmentsPage() {
   const [viewType, setViewType] = useState<'list' | 'map' | 'kanban'>('list');
   const [selectedShipment, setSelectedShipment] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('tracking');
-  const [shipments, setShipments] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All Statuses');
 
-  const supabase = createClient();
-
-  useEffect(() => {
-    async function fetchShipments() {
-      const { data, error } = await supabase
-        .from('shipments')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        toast.error('Failed to fetch shipments');
-      } else {
-        setShipments(data || []);
-      }
-      setIsLoading(false);
-    }
-    fetchShipments();
-  }, [supabase]);
+  // Hardcoded Africa-focused shipment data for instant loading
+  const shipments = [
+    { id: '1', status: 'In Transit', location: 'Lagos, Nigeria', eta: '2026-03-31', created_at: '2026-03-28', isotope: 'Co-60' },
+    { id: '2', status: 'At Customs', location: 'Nairobi, Kenya', eta: '2026-04-02', created_at: '2026-03-27', isotope: 'Ir-192' },
+    { id: '3', status: 'Delivered', location: 'Accra, Ghana', eta: '2026-03-26', created_at: '2026-03-26', isotope: 'I-131' },
+    { id: '4', status: 'Dispatched', location: 'Johannesburg, South Africa', eta: '2026-04-05', created_at: '2026-03-25', isotope: 'Cs-137' },
+  ];
+  const isLoading = false;
 
   const getStatusColor = (status: string): string => {
     switch (status) {

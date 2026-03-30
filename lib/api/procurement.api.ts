@@ -1,5 +1,3 @@
-import { createClient } from '@/lib/supabase/client';
-
 export interface Product {
     id: string;
     name: string;
@@ -20,36 +18,14 @@ export interface Procurement {
     product?: Product;
 }
 
-export async function getProducts() {
-    const supabase = createClient();
-    const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .order('name');
+import { mockProducts, mockProcurements, mockShipments, mockAlerts, mockActivities } from '../hardcoded-data'
 
-    if (error) throw error;
-    return data as Product[];
+export async function getProducts() {
+    return [...mockProducts].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export async function getProcurements() {
-    const supabase = createClient();
-    const { data, error } = await supabase
-        .from('procurements')
-        .select(`
-      *,
-      products (*)
-    `)
-        .order('created_at', { ascending: false });
-
-    if (error) throw error;
-
-    // Map products to product property to maintain interface compatibility
-    const mappedData = (data || []).map((item: any) => ({
-        ...item,
-        product: item.products
-    }));
-
-    return mappedData as Procurement[];
+    return [...mockProcurements].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 }
 
 export async function submitProcurementRequest(procurementData: {
@@ -60,101 +36,53 @@ export async function submitProcurementRequest(procurementData: {
     notes?: string;
     location?: string;
 }) {
-    const supabase = createClient();
-
-    // 1. Get user session
-    const { data: { session } } = await supabase.auth.getSession();
-    const userId = session?.user?.id;
-
-    // 2. Fetch product details for names/etc
-    const { data: product } = await supabase
-        .from('products')
-        .select('*')
-        .eq('id', procurementData.product_id)
-        .single();
-
+    const product = mockProducts.find(p => p.id === procurementData.product_id);
     if (!product) throw new Error('Product not found');
 
-    // 3. Create Procurement record
-    const { data: procurement, error: pError } = await supabase
-        .from('procurements')
-        .insert({
-            product_id: procurementData.product_id,
-            quantity: procurementData.quantity,
-            priority: procurementData.priority,
-            status: 'Pending',
-            delivery_date: procurementData.delivery_date,
-            user_id: userId
-        })
-        .select()
-        .single();
+    const newProcurement: Procurement & { products: Product } = {
+        id: 'PR-' + Math.floor(Math.random() * 10000),
+        product_id: procurementData.product_id,
+        quantity: procurementData.quantity,
+        priority: procurementData.priority,
+        status: 'Pending',
+        delivery_date: procurementData.delivery_date,
+        created_at: new Date().toISOString(),
+        products: product
+    };
 
-    if (pError) throw pError;
+    mockProcurements.push(newProcurement);
 
-    // 4. AUTOMATION: Create Shipment record
-    const { data: shipment, error: sError } = await supabase
-        .from('shipments')
-        .insert({
-            isotope: product.name,
-            origin: 'Distribution Center',
-            destination: procurementData.location || 'Hospital Pharmacy',
-            status: 'Pending',
-            eta: new Date(new Date(procurementData.delivery_date).getTime() + 86400000).toISOString(), // +1 day
-            status_color: 'bg-gray-100 text-gray-800'
-        })
-        .select()
-        .single();
+    mockShipments.push({
+        id: 'SHP-' + Math.floor(Math.random() * 10000),
+        isotope: product.name,
+        origin: 'Distribution Center',
+        destination: procurementData.location || 'Hospital Pharmacy',
+        status: 'Pending',
+        eta: new Date(new Date(procurementData.delivery_date).getTime() + 86400000).toISOString(),
+        status_color: 'bg-gray-100 text-gray-800'
+    });
 
-    if (sError) console.error('Failed to auto-create shipment:', sError);
+    mockAlerts.push({
+        id: 'CA-' + Math.floor(Math.random() * 10000),
+        severity: 'info',
+        title: `New Procurement: ${product.name}`,
+        description: `Compliance review required for new procurement.`
+    });
 
-    // 5. AUTOMATION: Create Compliance Alert
-    const { error: aError } = await supabase
-        .from('compliance_alerts')
-        .insert({
-            severity: 'info',
-            title: `New Procurement: ${product.name}`,
-            description: `Compliance review required for procurement ${procurement.id.substring(0, 8)}.`
-        });
+    mockActivities.push({
+        id: 'ACT-' + Math.floor(Math.random() * 10000),
+        event: `New procurement request submitted for ${product.name}`,
+        type: 'procurement',
+        time: new Date().toISOString()
+    });
 
-    if (aError) console.error('Failed to auto-create compliance alert:', aError);
-
-    // 6. AUTOMATION: Create Audit Trail (Traceability)
-    const { error: tError } = await supabase
-        .from('audit_trail')
-        .insert({
-            procurement_id: procurement.id,
-            shipment_id: shipment?.id,
-            event_type: 'Procurement Created',
-            actor: session?.user?.email || 'System',
-            location: 'Inventory Management',
-            description: `Procurement request initiated for ${procurementData.quantity} units of ${product.name}.`,
-            hash: '0x' + Math.random().toString(16).substring(2, 66) // Placeholder hash
-        });
-
-    if (tError) console.error('Failed to auto-create audit trail:', tError);
-
-    // 7. AUTOMATION: Create Activity
-    const { error: actError } = await supabase
-        .from('activities')
-        .insert({
-            event: `New procurement request submitted for ${product.name}`,
-            type: 'procurement',
-            user_id: userId
-        });
-
-    if (actError) console.error('Failed to auto-create activity:', actError);
-
-    return procurement;
+    return newProcurement;
 }
 
 export async function deleteProcurementRequest(id: string) {
-    const supabase = createClient();
-    const { error } = await supabase
-        .from('procurements')
-        .delete()
-        .eq('id', id);
-
-    if (error) throw error;
+    const index = mockProcurements.findIndex(p => p.id === id);
+    if (index > -1) {
+        mockProcurements.splice(index, 1);
+    }
     return true;
 }
-
